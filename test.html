@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <script lang="javascript" src="GrammarTools.js" ></script>
+    <meta charset="UTF-8">
+    <title></title>
+</head>
+<body>
+    <canvas id="canvas_left" width="400" height="300" style="border:1px solid #000000;"></canvas>
+</body>
+<script lang="javascript" >
+
+
+    var context = document.getElementById("canvas_left").getContext("2d");
+
+
+    context.font = '12pt Calibri';
+    context.lineWidth = 1;
+    circleWithText(context, 75, 75, "{q0,q1,q3,q7,q9,q8}");
+    circleWithText(context, 175, 75, "q0", true);
+
+
+
+
+    var g = new Grammar("Grammar #1");
+    g.addRule('S', 'aSSbca');
+    g.addRule('S', 'a');
+    //g.generateStringsFromState(10,'S');
+    reportAcceptedStrings(g, 11);
+
+    var r1 = new UnionRegExp();
+    r1.addPiece("abb");
+    r1.addPiece("baa");
+    r1.setStar(true);
+    var r2 = new UnionRegExp();
+    r2.addPiece("aaa");
+    r2.addPiece("abb");
+    var r3 = new ConcatRegExp();
+    r3.addPiece(r1);
+    r3.addPiece(r2);
+    console.log(r3.toString());
+    reportAcceptedStrings(r3, 11);
+
+    // Construct an NFA for (ab)*
+    var q0 = new FiniteAutomataState("q0");
+    var q1 = new FiniteAutomataState("q1");
+    q0.addTransition("a","q1");
+    q1.addTransition("b","q0");
+    q0.is_accepting = true;
+    var NFA = new FiniteAutomata([q0, q1]);
+
+    // Taken from Sudkamp, 2nd Ed., Page 190, Exercise 17
+    var NFA2 = new FiniteAutomata();
+    NFA2.addTransition("q0","a","q0");
+    NFA2.addTransition("q0","a","q1");
+    NFA2.addTransition("q1","b","q1");
+    NFA2.addTransition("q1","b","q1");
+    NFA2.addTransition("q2","a","q1");
+    NFA2.addTransition("q2","a","q0");
+    NFA2.setAccepting("q2");
+    reportAcceptedStrings(NFA2, 10);
+
+    // Equivalent Grammar
+    var gram2 = new Grammar("Grammar #2");
+    gram2.addRule("S", "aS"); // q0
+    gram2.addRule("S", "aA");
+    gram2.addRule("A", "bA"); //q1
+    gram2.addRule("A", "bB");
+    gram2.addRule("B", "aS"); // q2
+    gram2.addRule("B", "aA");
+    gram2.addRule("B", ""); // because q2 is an accepting state
+    reportAcceptedStrings(gram2, 10);
+
+    compareAcceptedStrings(NFA2, gram2);
+
+    // Equivalent Regexp
+    var q0q0arc = new ConcatRegExp()
+    q0q0arc.addPiece("a");
+    var q0q1arc = new ConcatRegExp();
+    q0q1arc.addPiece("a");
+    q0q1arc.addPiece("b", true);
+    q0q1arc.addPiece("b");
+    var q1q1arc = new ConcatRegExp();
+    q1q1arc.addPiece("a");
+    q1q1arc.addPiece("b", true);
+    q1q1arc.addPiece("b");
+    var q1q0arc = new ConcatRegExp();
+    q1q0arc.addPiece("a");
+    var whole_thing = new ConcatRegExp();
+    // First, add the parts to get form q0 to q1
+    whole_thing.addPiece(q0q0arc, true);
+    whole_thing.addPiece(q0q1arc);
+    // Now, make the "round trip" from q1 to q0 to q1
+    var round_trip = new UnionRegExp();
+    var q1toq0toq1 = new ConcatRegExp();
+    var q1toq1 = new ConcatRegExp();
+    q1toq1.addPiece("a");
+    q1toq1.addPiece("b", true);
+    q1toq1.addPiece("b");
+    q1toq0toq1.addPiece("a");
+    q1toq0toq1.addPiece(q0q0arc, true);
+    q1toq0toq1.addPiece(q0q1arc);
+    round_trip.addPiece(q1toq1);
+    round_trip.addPiece(q1toq0toq1);
+    round_trip.setStar(true);
+    whole_thing.addPiece(round_trip);
+
+    for(var string of ["ab(ab)*bb"]) {
+        var re = GenericRegExp.createRegExp(string);
+        console.log("Regexp generated from '" + string + "' is '" + re.toString() + "'");
+        reportAcceptedStrings(re, 8);
+    }
+
+
+    assert(! NFA.accepts('aaaa'), "(ab)* NFA accepts 'aaaa'");
+    assert(NFA.accepts('abab'), "(ab)* NFA doesn't accept 'abab'");
+    assert(! NFA.accepts('aba'), "(ab)* NFA accepts 'aba'");
+    reportAcceptedStrings(NFA, 11);
+
+    compareAcceptedStrings(NFA, g, 6);
+
+
+</script>
+</html>
