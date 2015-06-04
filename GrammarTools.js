@@ -97,6 +97,9 @@ function Grammar(name) {
     this.name = name;
     this.starting_state = 'S';
     this.clearRules();
+    this.lambda_char = "λ";
+    this.arrow = "→";
+
 }
 
 Grammar.prototype.constructor = function(name) {
@@ -118,7 +121,7 @@ Grammar.prototype.addRule = function (variable, result)  {
     this.rules[variable].push(result);
 };
 
-Grammar.prototype.getAcceptedStrings = function(maxlength)  {
+Grammar.prototype._getAcceptedStrings = function(maxlength)  {
     return this.generateStringsFromState(maxlength, this.starting_state, []);
 };
 
@@ -218,7 +221,34 @@ Grammar.prototype.constructNFA = function() {
     }
 };
 
+Grammar.prototype.getRuleList = function() {
+    var strings = [];
+    for( var rule in this.rules ) {
+        var pieces = [];
+        for( var piece of this.rules[rule] ) {
+            if( piece === "" ) {
+                pieces.push(this.lambda_char);
+            } else {
+                pieces.push(piece);
+            }
+        }
+        strings.push(rule + " " + this.arrow + " " + pieces.join(' | '));
+    }
+    return strings.join('\n');
+};
+
+Grammar.prototype.getName = function() {
+    if(this.name === undefined) {
+        return "Grammar";
+    }
+    return this.name;
+};
+
 Grammar.prototype.toString = function() {
+    //return this.getRuleList();
+    if( this.name == undefined ) {
+        return "Grammar";
+    }
     return this.name;
 };
 //endregion
@@ -417,10 +447,10 @@ GenericRegExp.prototype.setStar = function (starred) {
 
 // Get accepted strings
 // Returns the strings accepted by this regexp
-GenericRegExp.prototype.getAcceptedStrings = function(maxlength) {
+GenericRegExp.prototype._getAcceptedStrings = function(maxlength) {
     var the_strings = [];
     var regexp = new RegExp("^" + this.toRegexp() + "$");
-    var generator = new StringGenerator(this.getAlphabet());
+    var generator = new StringGenerator(this._getAlphabet());
     for( var the_string = generator.next(); the_string.length <= maxlength; the_string = generator.next()) {
         if(regexp.test(the_string)) {
             the_strings.push(the_string);
@@ -430,10 +460,10 @@ GenericRegExp.prototype.getAcceptedStrings = function(maxlength) {
 };
 
 // Return the alphabet used by this regexp
-GenericRegExp.prototype.getAlphabet = function() {
+GenericRegExp.prototype._getAlphabet = function() {
     var dict = {};
     for(var piece of this.pieces) {
-        var subalph = this.getAlphabetFromPiece(piece);
+        var subalph = this._getAlphabetFromPiece(piece);
         for(var char of subalph) {
             dict[char] = char;
         }
@@ -442,7 +472,7 @@ GenericRegExp.prototype.getAlphabet = function() {
 };
 
 // PRIVATE returns the alphabet used by a single piece
-GenericRegExp.prototype.getAlphabetFromPiece = function(piece) {
+GenericRegExp.prototype._getAlphabetFromPiece = function(piece) {
     // If the piece is a string, just return a dictionary with keys for all of the chars
     if(typeof piece == "string") {
         var dict = {};
@@ -451,8 +481,15 @@ GenericRegExp.prototype.getAlphabetFromPiece = function(piece) {
         }
         return Object.keys(dict);
     } else {
-        return piece.getAlphabet();
+        return piece._getAlphabet();
     }
+};
+
+GenericRegExp.prototype.getName = function() {
+    if(this.name === undefined) {
+        return "Regular Expression";
+    }
+    return this.name;
 };
 
 // Output to a string which looks pretty in HTML
@@ -560,7 +597,7 @@ FiniteAutomataState.prototype.clone = function() {
 };
 
 ///////////////// Informational /////////////////////
-FiniteAutomataState.prototype.getAlphabet = function() {
+FiniteAutomataState.prototype._getAlphabet = function() {
     return Object.keys(transitions);
 };
 
@@ -660,7 +697,7 @@ FiniteAutomata.getStringAsStateSet = function(string) {
 };
 
 FiniteAutomata.prototype.isDeterministic = function() {
-    var alphabet = this.getAlphabet();
+    var alphabet = this._getAlphabet();
     // Check every state
     for( var state of this.states ) {
         if( ! state.isDeterministicOverAlphabet(alphabet) ) {
@@ -731,7 +768,7 @@ FiniteAutomata.prototype.getInverse = function() {
     return that;
 };
 
-FiniteAutomata.prototype.getAlphabet = function() {
+FiniteAutomata.prototype._getAlphabet = function() {
     var dict = {};
     for( var state_name in this.states ) {
         var transitions = this.states[state_name].transitions;
@@ -743,7 +780,7 @@ FiniteAutomata.prototype.getAlphabet = function() {
 };
 
 // Figure the lambda-closure of a single state
-FiniteAutomata.prototype.getLambdaClosureOf = function(state_name, seen_state_names) {
+FiniteAutomata.prototype._getLambdaClosureOf = function(state_name, seen_state_names) {
     if( seen_state_names == undefined ) {
         seen_state_names = [];
     }
@@ -756,16 +793,16 @@ FiniteAutomata.prototype.getLambdaClosureOf = function(state_name, seen_state_na
             // This will prevent us from infinitely chasing lambda loops
             var new_seen_state_names = seen_state_names.concat([state_name]);
             // Add the lambda-closure of any states we can get to via lambda transitions
-            closure = union(closure, this.getLambdaClosureOf(dest_state_name, new_seen_state_names));
+            closure = union(closure, this._getLambdaClosureOf(dest_state_name, new_seen_state_names));
         }
     }
     return closure;
 };
 
-FiniteAutomata.prototype.getLambdaClosures = function() {
+FiniteAutomata.prototype._getLambdaClosures = function() {
     var closures = {};
     for( var state_name in this.states ) {
-        closures[state_name] = this.getLambdaClosureOf(state_name);
+        closures[state_name] = this._getLambdaClosureOf(state_name);
     }
     return closures;
 };
@@ -774,8 +811,8 @@ FiniteAutomata.prototype.getLambdaClosures = function() {
 FiniteAutomata.prototype.createDFA = function() {
     var DFA = new FiniteAutomata();
     // Generate the lambda-closures for each state
-    var lambda_closures = this.getLambdaClosures();
-    var alphabet = this.getAlphabet();
+    var lambda_closures = this._getLambdaClosures();
+    var alphabet = this._getAlphabet();
     // Create the starting state of the new DFA
     var starting_state_set = lambda_closures[this.starting_state];
     var starting_state_name = this.getStateSetAsString(starting_state_set);
@@ -828,12 +865,12 @@ FiniteAutomata.prototype.createDFA = function() {
     }
 };
 
-FiniteAutomata.prototype.stateExists = function(state_name) {
+FiniteAutomata.prototype._stateExists = function(state_name) {
     return state_name in this.states;
 };
 
-FiniteAutomata.prototype.renameState = function(old_name, new_name) {
-    if( this.stateExists(new_name) ) {
+FiniteAutomata.prototype._renameState = function(old_name, new_name) {
+    if( this._stateExists(new_name) ) {
         throw "Cannot rename state '" + old_name + "' to '" + new_name + "'. Name exists!";
     }
     this.states[old_name].name = new_name;
@@ -867,8 +904,8 @@ FiniteAutomata.prototype.normalizeStateNames = function() {
         // Keep incrementing counter until we find a state_name which isn't taken
         do {
             new_name = basename + str(counter++);
-        } while( this.stateExists(new_name));
-        this.renameState(old_name, new_name);
+        } while( this._stateExists(new_name));
+        this._renameState(old_name, new_name);
     }
     // At this point, none of the states should have names like 'q#'
     var counter = 0;
@@ -880,7 +917,7 @@ FiniteAutomata.prototype.normalizeStateNames = function() {
         unprocessed_state_names = unprocessed_state_names.slice(1);
         var new_name = 'q' + str(counter++);
         processed_state_names[new_name] = 1;
-        this.renameState(current_state, new_name);
+        this._renameState(current_state, new_name);
         // Now, check all of the transitions, and process all unprocessed states we find
         for( var symbol in this.states[new_name].transitions ) {
             for( var resulting_state of this.states[new_name].transitions[symbol] ) {
@@ -892,7 +929,7 @@ FiniteAutomata.prototype.normalizeStateNames = function() {
     }
 };
 
-FiniteAutomata.prototype.getAllSubsequentIMSs = function(starting_imc, transitions) {
+FiniteAutomata.prototype._getAllSubsequentIMSs = function(starting_imc, transitions) {
     var new_imcs = {};
 
     // First find all lambda transitions from here and conditionally add them
@@ -922,16 +959,15 @@ FiniteAutomata.prototype.getAllSubsequentIMSs = function(starting_imc, transitio
 };
 
 // Is this machine configuration accepting? (i.e. is the input string empty and the state an accepting state?
-FiniteAutomata.prototype.isAcceptingIMS = function(imc) {
+FiniteAutomata.prototype._isAcceptingIMS = function(imc) {
     return imc.getString().length == 0 && this.states[imc.getStateName()].is_accepting;
 };
 
-FiniteAutomata.prototype.getStartingIMS = function(string) {
+FiniteAutomata.prototype._getStartingIMS = function(string) {
     return new FiniteAutomataIMC( this.starting_state, string );
 };
 
 // Returns boolean whether the string is accepted by the FA or not
-// WARNING: No checking for cyclic lambda transitions is done
 FiniteAutomata.prototype.accepts = function(string) {
     // We approach this like a game AI searching for a winning sequence of moves.
     // We start with the starting state and string, and then find all resulting
@@ -939,14 +975,14 @@ FiniteAutomata.prototype.accepts = function(string) {
     // a state which is a final state and the string is "", then return true;
     // Otherwise, keep going. If unchecked_elements ever runs out of elements,
     // then return false.
-    var unchecked_imcs = [ this.getStartingIMS(string) ];
+    var unchecked_imcs = [ this._getStartingIMS(string) ];
     var checked_imcs = {};
     while(unchecked_imcs.length > 0 ) {
         var next_imc = unchecked_imcs.pop();
 //        var state_name = next_imc[0];
 //        var state_string = next_imc[1];
         // Check to see if this state is accepting
-        if( this.isAcceptingIMS(next_imc)) {
+        if( this._isAcceptingIMS(next_imc)) {
             return true;
         }
         // Add this state to the checked states
@@ -955,7 +991,7 @@ FiniteAutomata.prototype.accepts = function(string) {
         // Now, process all transitions which are available to us.
         var transitions = this.states[next_imc.getStateName()].transitions;
 
-        var subsequent_imcs = this.getAllSubsequentIMSs(next_imc, transitions);
+        var subsequent_imcs = this._getAllSubsequentIMSs(next_imc, transitions);
         // If we haven't already checked it, then add it to our list of IMS's to check
         for( var subsequent of subsequent_imcs ) {
             if( ! (subsequent.toString() in checked_imcs) ) {
@@ -969,9 +1005,9 @@ FiniteAutomata.prototype.accepts = function(string) {
 
 // Get accepted strings
 // Returns the strings accepted by this regexp
-FiniteAutomata.prototype.getAcceptedStrings = function(maxlength) {
+FiniteAutomata.prototype._getAcceptedStrings = function(maxlength) {
     var the_strings = [];
-    var generator = new StringGenerator(this.getAlphabet());
+    var generator = new StringGenerator(this._getAlphabet());
     for( var the_string = generator.next(); the_string.length <= maxlength; the_string = generator.next()) {
         if(this.accepts(the_string)) {
             the_strings.push(the_string);
@@ -980,8 +1016,25 @@ FiniteAutomata.prototype.getAcceptedStrings = function(maxlength) {
     return the_strings;
 };
 
+FiniteAutomata.prototype.getName = function() {
+    if(this.name === undefined) {
+        return "Finite Automata";
+    }
+    return this.name;
+};
+
 FiniteAutomata.prototype.toString = function() {
-    return "FiniteAutomata";
+    if( this.name == undefined ) {
+        return "FiniteAutomata";
+    }
+    return this.name;
+};
+
+FiniteAutomata.prototype.drawStateDiagram = function(context) {
+    context.font = '12pt Calibri';
+    context.lineWidth = 1;
+    circleWithText(context, 75, 75, "{q0,q1,q3,q8}");
+    circleWithText(context, 175, 75, "q0", true);
 };
 //endregion
 
@@ -1037,7 +1090,7 @@ PDA.inheritsFrom( FiniteAutomata );
 
 function reportAcceptedStrings(engine, maxlength) {
     console.log("Strings accepted by " + engine.toString() + " (up to a length of " + maxlength + "):");
-    var strings = engine.getAcceptedStrings(maxlength);
+    var strings = engine._getAcceptedStrings(maxlength);
     for( string of strings ) {
         console.log("'" + string + "'");
     }
@@ -1047,11 +1100,11 @@ function reportAcceptedStrings(engine, maxlength) {
 function compareAcceptedStrings(engine1, engine2, maxlength) {
     console.log("Comparing " + engine1.toString() + " with " + engine2.toString() + " (up to a length of " + maxlength + "):");
     var found_strings = {}; // Hashtable of bitmasks. key is a given string. Bit0 = accepted by engine1, Bit1 = accepted by engine2
-    var strings = engine1.getAcceptedStrings(maxlength);
+    var strings = engine1._getAcceptedStrings(maxlength);
     for( var string of strings ) {
         found_strings[string] = 1;
     }
-    var strings = engine2.getAcceptedStrings(maxlength);
+    var strings = engine2._getAcceptedStrings(maxlength);
     for( var string of strings ) {
         if( found_strings[string] == undefined ) {
             found_strings[string] = 0;

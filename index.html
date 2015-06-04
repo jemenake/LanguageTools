@@ -1,54 +1,158 @@
 ﻿<!Doctype html>
 <head>
-    <title>GoT Bootstrap Demo</title>
+    <title>Language Playpen</title>
     <link rel="stylesheet" href="css/bootstrap.min.css"/>
     <link rel="stylesheet" href="css/styles.css"/>
 </head>
 <body>
 <div class="jumbotron text-center">
-    Language Playpen
+    <h1>Language Playpen</h1>
 </div>
 <div class="container" id="container">
-    <div class="col-md-12">
-        <div class="jumbotron text-center">
-            Jumbotron text2
-        </div>
-
-        <div class="col-sm-5 text-justify sidepadding">
-            <div id="left_column" class="col-sm-12" >
-                <canvas id="canvas_left" class="col-sm-12" width="400" height="300" style="border:1px solid #000000;"></canvas>
-            </div>
-            <div id="left_bottom" class="col-sm-12" >
-                <button type="button" class="btn btn-default col-sm-4" onclick="addGrammarSandbox(); return false;">New Grammar</button>
-                <button type="button" class="btn btn-default col-sm-4" onclick="addAutomataSandbox(); return false;">New Automata</button>
-                <button type="button" class="btn btn-default col-sm-4" onclick="addRegExpSandbox(); return false;">New RegExp</button>
-            </div>
-        </div>
-        <div class="col-sm-2 text-justify sidepadding">
-            <button type="button" class="btn btn-default col-sm-12" onclick="addGrammarSandbox(); return false;">New Grammar</button>
-            <button type="button" class="btn btn-default col-sm-12" onclick="addAutomataSandbox(); return false;">New Automata</button>
-            <button type="button" class="btn btn-default col-sm-12" onclick="addRegExpSandbox(); return false;">New RegExp</button>
-        </div>
-        <div class="col-sm-5 text-justify sidepadding">
-            <div id="left_column" class="col-sm-12" >
-                <canvas id="canvas_right" width="400" height="300" style="border:1px solid #000000;"></canvas>
-            </div>
-            <div id="left_bottom" class="col-sm-12" >
-                <button type="button" class="btn btn-default col-sm-4" onclick="addGrammarSandbox(); return false;">New Grammar</button>
-                <button type="button" class="btn btn-default col-sm-4" onclick="addAutomataSandbox(); return false;">New Automata</button>
-                <button type="button" class="btn btn-default col-sm-4" onclick="addRegExpSandbox(); return false;">New RegExp</button>
-            </div>
-        </div>
-    </div>
-
 </div>
 
 <script src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
+<script src="GrammarTools.js"></script>
 
 <script language="JavaScript">
 
+    function compareSandbox(source) {
+        alert("Comparing sandboxes");
+    }
+
+    function removeSandbox(source) {
+        alert("Removing sandbox");
+    }
+
+    function showStringsForSandbox(source) {
+        var container = $( source).parent();
+        var name = container.data('sandbox').engine.toString();
+        alert("Strings for sandbox " + name);
+    }
+
+    // Sandbox class
+    function Sandbox() {
+        this.div = undefined;
+        this.engine = undefined;
+    }
+
+    // This is a little peculiar. It is for running a function on a certain number of
+    // items which have a certain CSS class. If adding this item
+    function toggleOrProcess(item, css_class, required_count, func) {
+        item.toggleClass(css_class);
+        var selected = $(css_class);
+        if(selected.length == required_count) {
+            func(selected);
+            selected.removeClass(css_class);
+        }
+    }
+
+    function getSelectedDivs() {
+        var selected = $(".selecteddiv");
+    }
+
+    Sandbox.prototype.generateSingleSandboxDiv = function() {
+        this.div = createFullWidthDiv();
+        $(this.div).addClass('sandbox');
+        $(this.div).data('sandbox',this);
+        var titlebar = createFullWidthDiv(this.engine.getName());
+        $(titlebar).addClass('text-center sandboxtitle');
+        this.div.appendChild(titlebar);
+        this.div.appendChild(this.renderContents());
+        this.div.appendChild(createButton("Strings","showStringsForSandbox(this)","See a list of strings accepted by this object"));
+        this.div.appendChild(createButton("Compare","compareSandbox(this)","Compare this object with any other"));
+        this.div.appendChild(createButton("Union","unionSandbox(this)","Union this object's language with another's"));
+        this.div.appendChild(createButton("Intersect","intersectSandbox(this)","Intersect this obect's language with another's"));
+        this.div.appendChild(createButton("Edit","editSandbox(this)","Edit this item"));
+        this.div.appendChild(createButton("Delete","removeSandbox(this)","Delete this object"));
+        for(var button of this.getExtraButtons()) {
+            this.div.appendChild(button);
+        }
+        return this.div;
+    };
+    Sandbox.prototype.getExtraButtons = function() {
+        return [];
+    };
+    Sandbox.prototype.renderContents = function() {
+        console.log("renderContents needs to be overridden");
+        return createFullWidthDiv("renderContents needs to be overridden");
+    };
+
+    ///////////////// AutomateSandbox //////////////////
+    AutomataSandbox.prototype = new Sandbox();
+    function AutomataSandbox() {
+        // Create automata to accept (ab)*
+        this.engine = new FiniteAutomata();
+        this.engine.addTransition('q0','a','q1');
+        this.engine.addTransition('q1','b','q0');
+        this.engine.setAccepting('q0');
+    }
+    AutomataSandbox.prototype.getExtraButtons = function() {
+        return [
+            createButton("Generate DFA","","Generate an equivalent DFA from this Automata"),
+            createButton("Reduce","","Generate a minimized NFA from this Automata"),
+            createButton("Generate Grammar","","Generate an equivalent DFA from this Automata"),
+            createButton("Generate RegExp","","Generate an equivalent DFA from this Automata")
+        ]
+    };
+    AutomataSandbox.prototype.renderContents = function() {
+        // An Automata sandbox will have a canvas for letting the engine draw the state diagram to it
+        this.canvas = createFullWidthCanvas("someID");
+        this.canvas.setAttribute("class","col-sm-12");
+        var context = this.canvas.getContext("2d");
+        this.engine.drawStateDiagram(context);
+        return this.canvas;
+    };
+
+    ///////////////// GrammarSandbox //////////////////
+    GrammarSandbox.prototype = new Sandbox();
+    function GrammarSandbox() {
+        // Create (ab)* grammar
+        this.engine = new Grammar();
+        this.engine.addRule("S","abS");
+        this.engine.addRule("S","");
+    }
+    GrammarSandbox.prototype.getExtraButtons = function() {
+        return [
+            createButton("Generate Automata","","Generate an equivalent NFA from this Grammar"),
+            createButton("Generate RegExp","","Generate an equivalent DFA from this Automata")
+        ]
+    };
+    GrammarSandbox.prototype.renderContents = function() {
+        var div = createFullWidthDiv(this.engine.getRuleList());
+        $(div).addClass('text-center sandboxbody');
+        return div;
+    };
+
+    ///////////////// RegExpSandbox //////////////////
+    RegExpSandbox.prototype = new Sandbox();
+    function RegExpSandbox() {
+        // Create (ab)* regexp
+        this.engine = new ConcatRegExp();
+        this.engine.addPiece("ab");
+        this.engine.setStar(true);
+    }
+    RegExpSandbox.prototype.getExtraButtons = function() {
+        return [
+            createButton("Generate Automata","","Generate an equivalent NFA from this RegExp"),
+            createButton("Generate Grammar","","Generate an equivalent Grammar to this RegExp")
+        ]
+    };
+    RegExpSandbox.prototype.renderContents = function() {
+        var div = createFullWidthDiv(this.engine.toString());
+        $(div).addClass('text-center sandboxbody');
+        return div;
+    };
+
     var sandbox_columns = [ [], [] ];
+
+    sandbox_columns[0].push(new GrammarSandbox());
+    sandbox_columns[1].push(new RegExpSandbox());
+    sandbox_columns[1].push(new AutomataSandbox());
+    renderSandboxes();
+
+
 
     function getSandboxContainer() {
         return document.getElementById('container')
@@ -59,27 +163,26 @@
     }
 
     function renderSandboxes() {
+        var columns = sandbox_columns.length;
+
         clearSandboxContainer();
-        var longest = sandbox_columns.reduce(function(a,b) { return Math.max(a.length, b.length); });
-        for(var i=0; i<longest; i++) {
-            var row = createRow(i);
-            for(var j=0; j<sandbox_columns.length; j++) {
-                if( sandbox_columns[i][j] != undefined ) {
-                    // Since there's a separator between each column, the sandboxes are at indexes j*2
-                    row[j*2] = createSandboxForObject(sandbox_columns[i][j])
-                }
+        for(var column_index=0; column_index<sandbox_columns.length; column_index++) {
+            var div = createSandboxDiv("BLAH");
+            div.appendChild(createTopButtons(column_index));
+            for(var row_index=0; row_index<sandbox_columns[column_index].length; row_index++) {
+                div.appendChild(sandbox_columns[column_index][row_index].generateSingleSandboxDiv());
             }
-            getSandboxContainer().appendChild(row);
+            getSandboxContainer().appendChild(div);
         }
     }
 
-    // Create a *row* of 3 divs (a sandbox, a middle, and another sandbox)
-    function createRow(row_num) {
-        var left = createSandboxDiv("row" + row_num + "-L");
-        var mid = createMiddleDiv("row" + row_num + "-M");
-        var right = createSandboxDiv("row" + row_num + "-R");
-        return [ left, mid, right ];
-    }
+//    // Create a *row* of 3 divs (a sandbox, a middle, and another sandbox)
+//    function createRow(row_num) {
+//        var left = createSandboxDiv("row" + row_num + "-L");
+//        var mid = createMiddleDiv("row" + row_num + "-M");
+//        var right = createSandboxDiv("row" + row_num + "-R");
+//        return [ left, mid, right ];
+//    }
 
     function createSandboxDiv(id) {
         var div = document.createElement("div");
@@ -92,18 +195,75 @@
         var div = document.createElement("div");
         div.setAttribute('id', id);
         div.setAttribute('class', 'col-sm-2');
+        div.appendChild(document.createTextNode(" "));
         return div
     }
 
+    function createTopButtons(param) {
+        var div = createFullWidthDiv();
+        addTopButtons(div, param);
+        return div;
+    }
 
+    function addTopButtons(div, parm) {
+        div.appendChild(createButton("New RegExp","addRegExpSandbox("+parm+")","Create a new Regular Expression"));
+        div.appendChild(createButton("New Grammar","addGrammarSandbox("+parm+")","Create a new Grammar"));
+        div.appendChild(createButton("New Automata","addAutomataSandbox("+parm+")","Create a new Finite Automata"));
+    }
+
+    function addSandbox(sandbox, column) {
+        sandbox_columns[column].push(sandbox);
+        renderSandboxes();
+    }
+
+    function addRegExpSandbox(column) {
+        addSandbox(new RegExpSandbox(), column);
+    }
+
+    function addGrammarSandbox(column) {
+        addSandbox(new GrammarSandbox(), column);
+    }
+
+    function addAutomataSandbox(column) {
+        addSandbox(new AutomataSandbox(), column);
+    }
+
+    // We need to create different buttons
+//    function createSandboxForObject(obj) {
+//        console.log("createSandboxForObject is deprecated");
+//        var div;
+//        var canvas;
+//        if(obj instanceof Grammar) {
+//            div = newGrammarSandbox();
+//        }
+//        if(obj instanceof FiniteAutomata) {
+//            div = newAutomataSandbox();
+//        }
+//        if(obj instanceof GenericRegExp) {
+//            div = newRegExpSandbox();
+//        }
+//        var sandbox = {
+//            div: div,
+//            canvas: canvas,
+//            engine: obj
+//        };
+//    }
 
     function deleteSandbox(row,col) {
-
-//        var element = document.getElementById(element_id);
-//        element.parentNode.removeChild(element);
+        if( sandbox_columns[col] != undefined ) {
+            if( sandbox_columns[col][row] != undefined ) {
+                sandbox_columns[col].splice(row,1);
+                renderSandboxes();
+            } else {
+                console.log("Can't delete sandbox at " + row + "," + col + " because the row doesn't exist in that column");
+            }
+        } else {
+            console.log("Can't delete sandbox at " + row + "," + col + " because the column doesn't exist");
+        }
     }
 
     function getUniqueId(basename) {
+        console.log("getUniqueId is deprecated");
         var count = 0;
         var id;
         do {
@@ -112,29 +272,29 @@
         return id;
     }
 
-    function addGrammarSandbox() {
-        var sandbox = createSandbox("Grammar");
-//        sandbox.appendChild(createGrammarButton());
-        sandbox.appendChild(createAutomataButton());
-        sandbox.appendChild(createRegExpButton());
-        getSandboxContainer().appendChild(sandbox);
-    }
-
-    function addAutomataSandbox() {
-        var sandbox = createSandbox("Automata");
-        sandbox.appendChild(createGrammarButton());
+//    function newGrammarSandbox() {
+//        var sandbox = createSandbox("Grammar");
+////        sandbox.appendChild(createGrammarButton());
 //        sandbox.appendChild(createAutomataButton());
-        sandbox.appendChild(createRegExpButton());
-        getSandboxContainer().appendChild(sandbox);
-    }
-
-    function addRegExpSandbox() {
-        var sandbox = createSandbox("RegExp");
-        sandbox.appendChild(createGrammarButton());
-        sandbox.appendChild(createAutomataButton());
 //        sandbox.appendChild(createRegExpButton());
-        getSandboxContainer().appendChild(sandbox);
-    }
+//        return sandbox;
+//    }
+//
+//    function newAutomataSandbox() {
+//        var sandbox = createSandbox("Automata");
+//        sandbox.appendChild(createGrammarButton());
+////        sandbox.appendChild(createAutomataButton());
+//        sandbox.appendChild(createRegExpButton());
+//        return sandbox;
+//    }
+//
+//    function newRegExpSandbox() {
+//        var sandbox = createSandbox("RegExp");
+//        sandbox.appendChild(createGrammarButton());
+//        sandbox.appendChild(createAutomataButton());
+////        sandbox.appendChild(createRegExpButton());
+//        return sandbox;
+//    }
 
     function createGrammarButton() {
         return createButton("Convert to Grammar", "generateGrammar()");
@@ -148,31 +308,50 @@
         return createButton("Convert to RegExp", "generateRegExp()");
     }
 
-    function createSandbox(name) {
-        var new_id = getUniqueId("sandbox");
+    function createFullWidthDiv(text) {
         var div = document.createElement("div");
-        div.setAttribute('id', new_id);
         div.setAttribute('class', 'col-sm-12');
-        div.appendChild(document.createTextNode(name));
-        div.appendChild(createCanvas(getUniqueId("canvas")));
-        div.appendChild(createButton("Delete","deleteSandbox('" + new_id + "')"));
+        if(text != undefined) {
+            div.appendChild(document.createTextNode(text));
+        }
         return div;
     }
 
-    function createButton(text, onclick) {
+//    function createSandbox(name) {
+//        var new_id = getUniqueId("sandbox");
+//        var div = document.createElement("div");
+//        div.setAttribute('id', new_id);
+//        div.setAttribute('class', 'col-sm-12');
+//        var name_div = document.createTextNode(name);
+//        $(name_div).addClass('text-center sandboxtitle');
+//        div.appendChild(name_div);
+//        div.appendChild(createFullWidthCanvas(getUniqueId("canvas")));
+//        div.appendChild(createButton("Delete","deleteSandbox('" + new_id + "')"));
+//        return div;
+//    }
+
+    function createButton(text, onclick, tooltip) {
         var button = document.createElement("button");
         button.appendChild(document.createTextNode(text));
         button.setAttribute('class','btn btn-default col-sm-4');
-        button.setAttribute('onclick',onclick + '; return false;')
+        button.setAttribute('onclick',onclick + '; return false;');
+        button.setAttribute('title',tooltip);
+        $(button).tooltip({
+            show: {
+                delay: 2250,
+                fade: 2250
+            }
+        });
         return button;
     }
 
     function createCanvasAt(column) {
+        console.log("createCanvasAt is deprecated");
         var num = 0;
         var ID_BASE = "grammarcanvas";
         var id_string = ID_BASE + num.toString();
 
-        var canv = createCanvas(id_string);
+        var canv = createFullWidthCanvas(id_string);
         placeCanvasAt(canv, column);
     }
 
@@ -180,17 +359,13 @@
         document.getElementById('container').appendChild(canv);
     }
 
-    function createCanvas(id) {
-        var CANV_WIDTH = 400;
-        var CANV_HEIGHT = 300;
-        var CANV_CLASS = "col-sm-12 sandboxcanvas";
+    function createFullWidthCanvas(id) {
         var canv = document.createElement("canvas");
-        canv.setAttribute('width',CANV_WIDTH);
-        canv.setAttribute('height',CANV_HEIGHT);
-        canv.setAttribute('class',CANV_CLASS);
-        canv.setAttribute('id',id);
+        canv.setAttribute('class', "col-sm-12 sandboxcanvas");
+        canv.setAttribute('id', id);
         return canv;
     }
+
 </script>
 
 </body>
