@@ -121,7 +121,7 @@ Grammar.prototype.addRule = function (variable, result)  {
     this.rules[variable].push(result);
 };
 
-Grammar.prototype._getAcceptedStrings = function(maxlength)  {
+Grammar.prototype.getAcceptedStrings = function(maxlength)  {
     return this.generateStringsFromState(maxlength, this.starting_state, []);
 };
 
@@ -447,7 +447,7 @@ GenericRegExp.prototype.setStar = function (starred) {
 
 // Get accepted strings
 // Returns the strings accepted by this regexp
-GenericRegExp.prototype._getAcceptedStrings = function(maxlength) {
+GenericRegExp.prototype.getAcceptedStrings = function(maxlength) {
     var the_strings = [];
     var regexp = new RegExp("^" + this.toRegexp() + "$");
     var generator = new StringGenerator(this._getAlphabet());
@@ -1005,7 +1005,7 @@ FiniteAutomata.prototype.accepts = function(string) {
 
 // Get accepted strings
 // Returns the strings accepted by this regexp
-FiniteAutomata.prototype._getAcceptedStrings = function(maxlength) {
+FiniteAutomata.prototype.getAcceptedStrings = function(maxlength) {
     var the_strings = [];
     var generator = new StringGenerator(this._getAlphabet());
     for( var the_string = generator.next(); the_string.length <= maxlength; the_string = generator.next()) {
@@ -1031,10 +1031,35 @@ FiniteAutomata.prototype.toString = function() {
 };
 
 FiniteAutomata.prototype.drawStateDiagram = function(context) {
+    var rows = 1;
+    var columns = 1;
+    var state_names = Object.keys(this.states);
+    while( state_names.length > rows * columns ) {
+        if( columns > rows ) {
+            rows++;
+        } else {
+            columns++;
+        }
+    }
+    console.log("rows = " + rows + "   columns = " + columns);
+    //var VPADDING = 10;
+    //var HPADDING = 10;
+    var canvasWidth = context.canvas.clientWidth;
+    var canvasHeight = context.canvas.clientHeight;
+    canvasWidth=200;
+    canvasHeight=150;
+    var h_step = canvasWidth / ( columns + 1 );
+    var v_step = canvasHeight / ( rows + 1 );
+
     context.font = '12pt Calibri';
     context.lineWidth = 1;
-    circleWithText(context, 75, 75, "{q0,q1,q3,q8}");
-    circleWithText(context, 175, 75, "q0", true);
+    for( var i = 0; i < state_names.length; i++ ) {
+        var row = Math.floor(i / columns);
+        var column = i % columns;
+        circleWithText(context, (column+1)*h_step, (row+1)*v_step, state_names[i], this.states[state_names[i]].is_accepting);
+    }
+    //circleWithText(context, 75, 75, "{q0,q1,q3,q8}");
+    //circleWithText(context, 175, 75, "q0", true);
 };
 //endregion
 
@@ -1090,7 +1115,7 @@ PDA.inheritsFrom( FiniteAutomata );
 
 function reportAcceptedStrings(engine, maxlength) {
     console.log("Strings accepted by " + engine.toString() + " (up to a length of " + maxlength + "):");
-    var strings = engine._getAcceptedStrings(maxlength);
+    var strings = engine.getAcceptedStrings(maxlength);
     for( string of strings ) {
         console.log("'" + string + "'");
     }
@@ -1098,13 +1123,14 @@ function reportAcceptedStrings(engine, maxlength) {
 }
 
 function compareAcceptedStrings(engine1, engine2, maxlength) {
-    console.log("Comparing " + engine1.toString() + " with " + engine2.toString() + " (up to a length of " + maxlength + "):");
+    var output = [];
+    output.push("Comparing " + engine1.getName() + " with " + engine2.getName() + " (up to a length of " + maxlength + "):");
     var found_strings = {}; // Hashtable of bitmasks. key is a given string. Bit0 = accepted by engine1, Bit1 = accepted by engine2
-    var strings = engine1._getAcceptedStrings(maxlength);
+    var strings = engine1.getAcceptedStrings(maxlength);
     for( var string of strings ) {
         found_strings[string] = 1;
     }
-    var strings = engine2._getAcceptedStrings(maxlength);
+    var strings = engine2.getAcceptedStrings(maxlength);
     for( var string of strings ) {
         if( found_strings[string] == undefined ) {
             found_strings[string] = 0;
@@ -1123,22 +1149,23 @@ function compareAcceptedStrings(engine1, engine2, maxlength) {
         }
     }
     if(only_in_1.length > 0) {
-        console.log("Strings only accepted by " + engine1.toString());
+        output.push("Strings only accepted by " + engine1.toString());
         for( var string of only_in_1 ) {
-            console.log("'" + string + "'");
+            output.push("'" + string + "'");
         }
-        console.log("END");
+        output.push("END");
     }
     if(only_in_2.length > 0) {
-        console.log("Strings only accepted by " + engine2.toString());
+        output.push("Strings only accepted by " + engine2.toString());
         for( var string of only_in_2 ) {
-            console.log("'" + string + "'");
+            output.push("'" + string + "'");
         }
-        console.log("END");
+        output.push("END");
     }
     if(only_in_1.length + only_in_2.length == 0) {
-        console.log("No differences found (for this maximum length");
+        output.push("No differences found (for this maximum length");
     }
+    return output.join("\n");
 }
 
 

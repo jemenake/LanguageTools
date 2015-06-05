@@ -11,7 +11,7 @@
 <div class="container" id="container">
 </div>
 
-<script src="http://code.jquery.com/jquery-2.1.4.min.js"></script>
+<script src="js/jquery-2.1.4.min.js"></script>
 <script src="js/bootstrap.min.js"></script>
 <script src="GrammarTools.js"></script>
 
@@ -37,14 +37,50 @@
         this.engine = undefined;
     }
 
+    function getContainingSandboxDiv(source) {
+        return $(source).closest(".sandbox");
+    }
+
+    function showStringsForSandbox(source) {
+        var sandbox_div = getContainingSandboxDiv(source);
+        var sandbox = sandbox_div.data('sandbox');
+        alert(sandbox.engine.getAcceptedStrings(10).join("\n"));
+    }
+
+    function removeSandbox(source) {
+        // This is ugly. Get the Sandbox object and then find the item in the sandbox_columns which matches it
+        var sandbox = getContainingSandboxDiv(source).data('sandbox');
+        for(var col=0; col<sandbox_columns.length; col++) {
+            for(var row=0; row<sandbox_columns[col].length; row++) {
+                if(sandbox_columns[col][row] === sandbox) {
+                    // Delete this sandbox from the array
+                    sandbox_columns[col].splice(row, 1);
+                    row--; // We shouldn't find any other matches, but just in case
+                }
+            }
+        }
+        renderSandboxes();
+    }
+
+    function compareSandboxes(sandbox_divs) {
+        var sandbox0 = $(sandbox_divs[0]).data('sandbox');
+        var sandbox1 = $(sandbox_divs[1]).data('sandbox');
+        alert(compareAcceptedStrings(sandbox0.engine, sandbox1.engine, 10));
+    }
+
+    function compareSandbox(source) {
+        var sandbox = $(source).closest(".sandbox");
+        toggleOrProcess(sandbox, "selecteddiv", 2, compareSandboxes);
+    }
+
     // This is a little peculiar. It is for running a function on a certain number of
     // items which have a certain CSS class. If adding this item
     function toggleOrProcess(item, css_class, required_count, func) {
         item.toggleClass(css_class);
-        var selected = $(css_class);
-        if(selected.length == required_count) {
-            func(selected);
-            selected.removeClass(css_class);
+        var selected_divs = $("." + css_class);
+        if(selected_divs.length === required_count) {
+            func(selected_divs);
+            selected_divs.removeClass(css_class);
         }
     }
 
@@ -66,6 +102,9 @@
         this.div.appendChild(createButton("Intersect","intersectSandbox(this)","Intersect this obect's language with another's"));
         this.div.appendChild(createButton("Edit","editSandbox(this)","Edit this item"));
         this.div.appendChild(createButton("Delete","removeSandbox(this)","Delete this object"));
+        $(this.div).children("#Union").prop("disabled",true);
+        $(this.div).children("#Intersect").prop("disabled",true);
+        $(this.div).children("#Edit").prop("disabled",true);
         for(var button of this.getExtraButtons()) {
             this.div.appendChild(button);
         }
@@ -336,6 +375,7 @@
         button.setAttribute('class','btn btn-default col-sm-4');
         button.setAttribute('onclick',onclick + '; return false;');
         button.setAttribute('title',tooltip);
+        button.setAttribute('id',text);
         $(button).tooltip({
             show: {
                 delay: 2250,
