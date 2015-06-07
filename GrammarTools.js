@@ -97,16 +97,21 @@ function Grammar(name) {
     this.name = name;
     this.starting_state = 'S';
     this.clearRules();
-    this.lambda_char = "λ";
-    this.arrow = "→";
-
 }
+// Static properties
+Grammar.lambda_char = "λ";
+Grammar.arrow = "→";
+Grammar.grammar_left_regexp = /^[a-zA-Z]*[A-Z][a-zA-Z]*$/; // We require at least one capital letter on the left side
+Grammar.grammar_right_regexp = /^[a-zA-Z]*$/; // Can be any mix of symbols and variables
+Grammar.cf_grammar_left_regexp = /^[A-Z]$/; // Can only be single variables
+Grammar.cf_grammar_right_regexp = Grammar.grammar_right_regexp; // Same as unrestricted grammar
+Grammar.reg_grammar_left_regexp = Grammar.cf_grammar_left_regexp;
+Grammar.reg_grammar_right_regexp = /^([a-z][A-Z]?)?$/; // Empty string, single symbol, or single symbol followed by single variable
 
 Grammar.prototype.constructor = function(name) {
     this.name = name;
     this.starting_state = 'S';
     this.clearRules();
-
 };
 
 Grammar.prototype.clearRules = function() {
@@ -122,10 +127,10 @@ Grammar.prototype.addRule = function (variable, result)  {
 };
 
 Grammar.prototype.getAcceptedStrings = function(maxlength)  {
-    return this.generateStringsFromState(maxlength, this.starting_state, []);
+    return this.__generateStringsFromState(maxlength, this.starting_state, []);
 };
 
-Grammar.prototype.breakAtFirstVariable = function(string) {
+Grammar.prototype.__breakAtFirstVariable = function(string) {
     var result = string.match(/[A-Z]/);
     if( result == null ) {
         return [ string, "", "" ];
@@ -136,14 +141,14 @@ Grammar.prototype.breakAtFirstVariable = function(string) {
     return [ before, variable, after ];
 };
 
-Grammar.prototype.hasVariables = function(string) {
+Grammar.prototype.__hasVariables = function(string) {
     // Is there something returned for the first variable?
-    return this.breakAtFirstVariable(string)[1].length > 0;
+    return this.__breakAtFirstVariable(string)[1].length > 0;
 };
 
-Grammar.prototype.getAllSubsequentStrings = function(string) {
+Grammar.prototype.__getAllSubsequentStrings = function(string) {
     var strings = [];
-    var pieces = this.breakAtFirstVariable(string);
+    var pieces = this.__breakAtFirstVariable(string);
     // pieces[0] should now contain something before the first variable
     // pieces[1] should contain the first variable
     // pieces[2] should now contain everything after
@@ -158,7 +163,7 @@ Grammar.prototype.getAllSubsequentStrings = function(string) {
     return strings;
 };
 
-Grammar.prototype.generateStringsFromState = function (maxlength, variable_name, vars_seen) {
+Grammar.prototype.__generateStringsFromState = function (maxlength, variable_name, vars_seen) {
     // Get the rules for this variable name
     var rules = this.rules[variable_name];
     if (rules.length == 0) {
@@ -175,11 +180,11 @@ Grammar.prototype.generateStringsFromState = function (maxlength, variable_name,
         processed_strings[next_string] = 1;
 
         // If this string has no variables, then it's done. Add it to the list of strings
-        if( ! this.hasVariables(next_string) ) {
+        if( ! this.__hasVariables(next_string) ) {
             strings.push(next_string);
         } else {
             // Otherwise, process all substitutions on the first variable
-            var subsequent_strings = this.getAllSubsequentStrings(next_string);
+            var subsequent_strings = this.__getAllSubsequentStrings(next_string);
             // If we haven't already checked it, then add it to our list of IMS's to check
             for( var subsequent of subsequent_strings ) {
                 if( ! (subsequent in processed_strings) && subsequent.length <= maxlength) {
@@ -189,26 +194,6 @@ Grammar.prototype.generateStringsFromState = function (maxlength, variable_name,
         }
     }
     return strings;
-
-
-    for (var rule of rules) {
-        // We need to catch circular references to keep the grammar-generator from looping forever.
-        // In order to do this, we keep an array of all of our immediate ancestors which haven't
-        // added any terminal symbols to the string (i.e. there's no way for the maxlength to
-        // stop the recursion). So...
-        // IF this rule doesn't have any terminal symbols:
-        // THEN...
-        //    IF *any* of the variables listed in the rule are in vars_seen:
-        //       abort processing this rule
-        //    ELSE
-        //       set a FLAG so that, when we process each variable in the rule,
-        //       we add that variable to vars_seen
-        // ELSE...
-        //    set vars_seen to []
-        //
-        // TODO catch circular references
-
-    }
 };
 
 Grammar.prototype.generateStringsFromSets = function (chunks) {
@@ -216,25 +201,82 @@ Grammar.prototype.generateStringsFromSets = function (chunks) {
 };
 
 Grammar.prototype.constructNFA = function() {
-    if(! this.isRegular() ) {
-        console.log("constructNFA() called for non-regular")
+    if (!this.isRegular()) {
+        console.log("constructNFA() called for non-regular Grammar")
+        return null;
     }
+
+    var nfa = new FiniteAutomata();
+    for (var variable in this.rules) {
+        for (var rule of this.rules[variable]) {
+            // If lambda is one of the consequents, then this state is accepting
+            if (rule.length === 0) {
+                nfa.setAccepting(variable);
+                continue;
+            }
+            // Otherwise, there's a transition involved.
+            var symbol = rule[0];
+            var destination_state;
+            // If the rule is just a single char, then make a transition to "Z"
+            if (rule.length === 1) {
+                destination_state = "Z";
+                nfa.getOrCreateState(destination_state);
+                nfa.setAccepting(destination_state);
+            } else {
+                destination_state = rule[1];
+            }
+            nfa.addTransition(variable, symbol, destination_state);
+        }
+    }
+    return nfa;
 };
 
-Grammar.prototype.getRuleList = function() {
+Grammar.prototype.isContextFree = function() {
+    for(var variable in this.rules) {
+        // If *any* rule fails to match the context-free left-side regexp, return false
+        if(variable.match(Grammar.cf_grammar_left_regexp) == null) {
+            return false;
+        }
+    }
+    return true;
+};
+
+Grammar.prototype.isRegular = function() {
+    for(var variable in this.rules) {
+        // If *any* replacement fails to match the regular right-side regexp, return false
+        for(var replacement of this.rules[variable]) {
+            if(replacement.match(Grammar.reg_grammar_right_regexp) == null) {
+                return false;
+            }
+        }
+    }
+    // Otherwise, it depends upon whether the left sides are context-free
+    return this.isContextFree();
+};
+
+Grammar.makeRulesFromStrings = function(strings) {
+    var rules = {};
+    alert("maeRulesFromStrings isn't done");
+};
+
+Grammar.prototype.getRuleListAsString = function() {
+    return this.getRuleListAsStrings().join('\n');
+};
+
+Grammar.prototype.getRuleListAsStrings = function() {
     var strings = [];
     for( var rule in this.rules ) {
         var pieces = [];
         for( var piece of this.rules[rule] ) {
             if( piece === "" ) {
-                pieces.push(this.lambda_char);
+                pieces.push(Grammar.lambda_char);
             } else {
                 pieces.push(piece);
             }
         }
-        strings.push(rule + " " + this.arrow + " " + pieces.join(' | '));
+        strings.push(rule + " " + Grammar.arrow + " " + pieces.join(' | '));
     }
-    return strings.join('\n');
+    return strings;
 };
 
 Grammar.prototype.getName = function() {
@@ -245,7 +287,7 @@ Grammar.prototype.getName = function() {
 };
 
 Grammar.prototype.toString = function() {
-    //return this.getRuleList();
+    //return this.getRuleListAsString();
     if( this.name == undefined ) {
         return "Grammar";
     }
@@ -302,6 +344,31 @@ RegularGrammar.prototype.addRule = function (variable, result)  {
         throw "RegularGrammar.addRule() was passed an illegal result: '" + result + "'";
     }
     parent.addRule(variable, result);
+};
+
+RegularGrammar.prototype.constructNFA = function() {
+    var nfa = new FiniteAutomata();
+    for(var variable in this.rules) {
+        for(var rule of this.rules[variable]) {
+            // If lambda is one of the consequents, then this state is accepting
+            if(rule.length === 0) {
+                nfa.setAccepting(variable);
+            }
+            // Otherwise, there's a transition involved.
+            var symbol = rule[0];
+            var destination_state;
+            // If the rule is just a single char, then make a transition to "Z"
+            if(rule.length === 1) {
+                destination_state = "Z";
+                nfa.addState(destination_state);
+                nfa.setAccepting(destination_state);
+            } else {
+                destination_state = rule[1];
+            }
+            nfa.addTransition(variable, symbol, destination_state);
+        }
+    }
+    return nfa;
 };
 //endregion
 //endregion
@@ -718,7 +785,7 @@ FiniteAutomata.prototype.isLambda = function() {
 
 FiniteAutomata.prototype.containsStateName = function(state_name) {
     return state_name in this.states;
-}
+};
 
 FiniteAutomata.prototype.addState = function(state) {
     var state_name = state.name;
@@ -1044,10 +1111,8 @@ FiniteAutomata.prototype.drawStateDiagram = function(context) {
     console.log("rows = " + rows + "   columns = " + columns);
     //var VPADDING = 10;
     //var HPADDING = 10;
-    var canvasWidth = context.canvas.clientWidth;
-    var canvasHeight = context.canvas.clientHeight;
-    canvasWidth=200;
-    canvasHeight=150;
+    var canvasWidth = context.canvas.width;
+    var canvasHeight = context.canvas.height;
     var h_step = canvasWidth / ( columns + 1 );
     var v_step = canvasHeight / ( rows + 1 );
 
